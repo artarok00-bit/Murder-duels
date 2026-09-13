@@ -1,4 +1,4 @@
--- [[ Murder Duels — ХИТБОКСЫ (до 100) + ESP + HOTKEY ]]
+-- [[ Murder Duels — ХИТБОКСЫ (до 100) + ESP (авто-обновление) + HOTKEY ]]
 -- H — включить/выключить хитбоксы
 
 local Player = game.Players.LocalPlayer
@@ -6,8 +6,8 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 -- ===== НАСТРОЙКИ =====
-local RefreshCooldown = 5
-local HitboxHotkey = Enum.KeyCode.H
+local CheckInterval = 0.5
+local HitboxHotkey = Enum.KeyCode.H -- 🔥 ГОРЯЧАЯ КЛАВИША
 
 -- ===== ХИТБОКСЫ =====
 local HitboxScale = 3
@@ -39,10 +39,9 @@ local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0, 10)
 Corner.Parent = MainFrame
 
--- ===== ШАПКА =====
+-- Шапка
 local TopBar = Instance.new("Frame")
 TopBar.Size = UDim2.new(1, 0, 0, 40)
-TopBar.Position = UDim2.new(0, 0, 0, 0)
 TopBar.BackgroundColor3 = Color3.fromRGB(50, 200, 120)
 TopBar.BorderSizePixel = 0
 TopBar.Parent = MainFrame
@@ -76,7 +75,7 @@ local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 5)
 CloseCorner.Parent = CloseBtn
 
--- ===== ВКЛАДКИ =====
+-- Вкладки
 local TabBar = Instance.new("Frame")
 TabBar.Size = UDim2.new(1, 0, 0, 35)
 TabBar.Position = UDim2.new(0, 0, 0, 40)
@@ -86,7 +85,6 @@ TabBar.Parent = MainFrame
 
 local HitboxTab = Instance.new("TextButton")
 HitboxTab.Size = UDim2.new(0.5, 0, 1, 0)
-HitboxTab.Position = UDim2.new(0, 0, 0, 0)
 HitboxTab.Text = "📦 ХИТБОКСЫ"
 HitboxTab.TextColor3 = Color3.fromRGB(255, 255, 255)
 HitboxTab.TextSize = 13
@@ -106,7 +104,7 @@ ViewTab.BorderSizePixel = 0
 ViewTab.Font = Enum.Font.GothamSemibold
 ViewTab.Parent = TabBar
 
--- ===== КОНТЕНТ =====
+-- Контент
 local Content = Instance.new("Frame")
 Content.Size = UDim2.new(1, 0, 1, -75)
 Content.Position = UDim2.new(0, 0, 0, 75)
@@ -328,38 +326,39 @@ for i, c in ipairs(colors) do
     end)
 end
 
--- ===== ФУНКЦИИ ХИТБОКСОВ =====
+-- ===== ФУНКЦИИ =====
 local function GetHitboxParts(char)
     local parts = {}
-    for _, name in ipairs({"Head", "UpperTorso", "LowerTorso", "Torso",
-                            "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm",
-                            "LeftHand", "RightHand", "LeftUpperLeg", "RightUpperLeg",
-                            "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot",
-                            "HumanoidRootPart"}) do
-        local part = char:FindFirstChild(name)
-        if part and part:IsA("BasePart") then
+    for _, part in ipairs(char:GetChildren()) do
+        if part:IsA("BasePart") then
             table.insert(parts, part)
         end
     end
     return parts
 end
 
+-- ===== ХИТБОКСЫ =====
+local function ApplyHitboxToPlayer(otherPlayer)
+    if otherPlayer == Player then return end
+    local char = otherPlayer.Character
+    if not char then return end
+    if char == Player.Character then return end
+    
+    local parts = GetHitboxParts(char)
+    for _, part in ipairs(parts) do
+        if not OriginalSizes[part] then
+            OriginalSizes[part] = {Size = part.Size}
+            part.Size = part.Size * HitboxScale
+        end
+    end
+end
+
 function EnableHitbox()
     HitboxActive = true
     OriginalSizes = {}
-    local myChar = Player.Character
     
     for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
-        if otherPlayer ~= Player then
-            local char = otherPlayer.Character
-            if char and char ~= myChar then
-                local parts = GetHitboxParts(char)
-                for _, part in ipairs(parts) do
-                    OriginalSizes[part] = {Size = part.Size}
-                    part.Size = part.Size * HitboxScale
-                end
-            end
-        end
+        ApplyHitboxToPlayer(otherPlayer)
     end
     
     HitboxBtn.Text = "🎯 ВЫКЛЮЧИТЬ ХИТБОКСЫ"
@@ -384,9 +383,11 @@ function DisableHitbox()
     HitboxStatus.TextColor3 = Color3.fromRGB(200, 80, 80)
 end
 
--- ===== ФУНКЦИИ ESP =====
+-- ===== ESP =====
 local function CreateHighlight(char)
     if not char then return nil end
+    local old = char:FindFirstChild("MurderESP")
+    if old then old:Destroy() end
     
     local highlight = Instance.new("Highlight")
     highlight.Name = "MurderESP"
@@ -400,21 +401,20 @@ local function CreateHighlight(char)
     return highlight
 end
 
-local function RemoveAllHighlights()
-    for _, highlight in pairs(EspHighlights) do
-        if highlight and highlight.Parent then
-            highlight:Destroy()
-        end
-    end
-    EspHighlights = {}
+local function ApplyEspToPlayer(otherPlayer)
+    if otherPlayer == Player then return end
+    local char = otherPlayer.Character
+    if not char then return end
+    if char == Player.Character then return end
     
-    for _, p in ipairs(game.Players:GetPlayers()) do
-        if p.Character then
-            for _, obj in ipairs(p.Character:GetChildren()) do
-                if obj:IsA("Highlight") and obj.Name == "MurderESP" then
-                    obj:Destroy()
-                end
-            end
+    local humanoid = char:FindFirstChild("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then return end
+    
+    local existing = char:FindFirstChild("MurderESP")
+    if not existing then
+        local highlight = CreateHighlight(char)
+        if highlight then
+            EspHighlights[otherPlayer] = highlight
         end
     end
 end
@@ -422,18 +422,9 @@ end
 function EnableEsp()
     EspActive = true
     EspHighlights = {}
-    local myChar = Player.Character
     
     for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
-        if otherPlayer ~= Player then
-            local char = otherPlayer.Character
-            if char and char ~= myChar then
-                local highlight = CreateHighlight(char)
-                if highlight then
-                    EspHighlights[otherPlayer] = highlight
-                end
-            end
-        end
+        ApplyEspToPlayer(otherPlayer)
     end
     
     EspBtn.Text = "👁 ВЫКЛЮЧИТЬ ESP"
@@ -444,54 +435,25 @@ end
 
 function DisableEsp()
     EspActive = false
-    RemoveAllHighlights()
+    
+    for _, highlight in pairs(EspHighlights) do
+        if highlight and highlight.Parent then
+            highlight:Destroy()
+        end
+    end
+    EspHighlights = {}
+    
+    for _, p in ipairs(game.Players:GetPlayers()) do
+        if p.Character then
+            local h = p.Character:FindFirstChild("MurderESP")
+            if h then h:Destroy() end
+        end
+    end
     
     EspBtn.Text = "👁 ВКЛЮЧИТЬ ESP"
     EspBtn.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
     EspStatus.Text = "● ВЫКЛЮЧЕНО"
     EspStatus.TextColor3 = Color3.fromRGB(200, 80, 80)
-end
-
-local function UpdateEsp()
-    if not EspActive then return end
-    local myChar = Player.Character
-    
-    for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
-        if otherPlayer ~= Player then
-            local char = otherPlayer.Character
-            if char and char ~= myChar then
-                local humanoid = char:FindFirstChild("Humanoid")
-                if humanoid and humanoid.Health > 0 then
-                    if not EspHighlights[otherPlayer] or not EspHighlights[otherPlayer].Parent then
-                        local highlight = CreateHighlight(char)
-                        if highlight then
-                            EspHighlights[otherPlayer] = highlight
-                        end
-                    end
-                end
-            end
-        end
-    end
-end
-
-local function UpdateHitbox()
-    if not HitboxActive then return end
-    local myChar = Player.Character
-    
-    for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
-        if otherPlayer ~= Player then
-            local char = otherPlayer.Character
-            if char and char ~= myChar then
-                local parts = GetHitboxParts(char)
-                for _, part in ipairs(parts) do
-                    if not OriginalSizes[part] then
-                        OriginalSizes[part] = {Size = part.Size / HitboxScale}
-                        part.Size = part.Size * HitboxScale
-                    end
-                end
-            end
-        end
-    end
 end
 
 -- ===== 🔥 ГОРЯЧАЯ КЛАВИША H =====
@@ -504,6 +466,46 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             EnableHitbox()
         end
     end
+end)
+
+-- ===== ГЛАВНЫЙ ЦИКЛ =====
+task.spawn(function()
+    while ScreenGui.Parent do
+        task.wait(CheckInterval)
+        
+        if EspActive then
+            for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
+                ApplyEspToPlayer(otherPlayer)
+            end
+        end
+        
+        if HitboxActive then
+            for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
+                ApplyHitboxToPlayer(otherPlayer)
+            end
+        end
+    end
+end)
+
+-- ===== ОТСЛЕЖИВАНИЕ НОВЫХ ПЕРСОНАЖЕЙ =====
+local function OnCharacterAdded(otherPlayer)
+    task.wait(1)
+    if EspActive then ApplyEspToPlayer(otherPlayer) end
+    if HitboxActive then ApplyHitboxToPlayer(otherPlayer) end
+end
+
+for _, p in ipairs(game.Players:GetPlayers()) do
+    if p ~= Player then
+        p.CharacterAdded:Connect(function()
+            OnCharacterAdded(p)
+        end)
+    end
+end
+
+game.Players.PlayerAdded:Connect(function(p)
+    p.CharacterAdded:Connect(function()
+        OnCharacterAdded(p)
+    end)
 end)
 
 -- ===== ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК =====
@@ -538,23 +540,6 @@ CloseBtn.MouseButton1Click:Connect(function()
     if HitboxActive then DisableHitbox() end
     if EspActive then DisableEsp() end
     ScreenGui:Destroy()
-end)
-
--- ===== АВТООБНОВЛЕНИЕ =====
-task.spawn(function()
-    while ScreenGui.Parent do
-        task.wait(RefreshCooldown)
-        if ScreenGui.Parent then
-            if EspActive then UpdateEsp() end
-            if HitboxActive then UpdateHitbox() end
-        end
-    end
-end)
-
-Player.CharacterAdded:Connect(function()
-    task.wait(1)
-    if EspActive then UpdateEsp() end
-    if HitboxActive then UpdateHitbox() end
 end)
 
 print("✅ Murder Duels загружено! H — вкл/выкл хитбоксы")
