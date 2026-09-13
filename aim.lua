@@ -1,11 +1,12 @@
--- [[ Murder Duels — ХИТБОКСЫ (до 100) + ESP (авто-обновление) ]]
--- Работает на ВСЕХ игроков, включая новых и после респавна
+-- [[ Murder Duels — ХИТБОКСЫ (до 100) + ESP ]]
+-- Вкладка "ХИТБОКСЫ": увеличение хитбоксов до 100 раз
+-- Вкладка "ВИД": ESP (красная обводка)
 
 local Player = game.Players.LocalPlayer
 local RunService = game:GetService("RunService")
 
 -- ===== НАСТРОЙКИ =====
-local CheckInterval = 0.5 -- проверка каждые 0.5 сек (быстро)
+local RefreshCooldown = 5
 
 -- ===== ХИТБОКСЫ =====
 local HitboxScale = 3
@@ -315,52 +316,38 @@ for i, c in ipairs(colors) do
     end)
 end
 
--- ===== ФУНКЦИИ =====
-
--- Универсальный поиск частей (R6 и R15)
+-- ===== ФУНКЦИИ ХИТБОКСОВ =====
 local function GetHitboxParts(char)
     local parts = {}
-    for _, part in ipairs(char:GetChildren()) do
-        if part:IsA("BasePart") then
+    for _, name in ipairs({"Head", "UpperTorso", "LowerTorso", "Torso",
+                            "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm",
+                            "LeftHand", "RightHand", "LeftUpperLeg", "RightUpperLeg",
+                            "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot",
+                            "HumanoidRootPart"}) do
+        local part = char:FindFirstChild(name)
+        if part and part:IsA("BasePart") then
             table.insert(parts, part)
         end
     end
     return parts
 end
 
--- Проверка: живой ли игрок
-local function IsPlayerAlive(otherPlayer)
-    if otherPlayer == Player then return false end
-    local char = otherPlayer.Character
-    if not char then return false end
-    local humanoid = char:FindFirstChild("Humanoid")
-    if not humanoid then return false end
-    return humanoid.Health > 0
-end
-
--- ===== ХИТБОКСЫ =====
-local function ApplyHitboxToPlayer(otherPlayer)
-    if otherPlayer == Player then return end
-    local char = otherPlayer.Character
-    if not char then return end
-    if char == Player.Character then return end
-    
-    local parts = GetHitboxParts(char)
-    for _, part in ipairs(parts) do
-        -- Если ещё не сохранили — сохраняем оригинальный размер
-        if not OriginalSizes[part] then
-            OriginalSizes[part] = {Size = part.Size}
-            part.Size = part.Size * HitboxScale
-        end
-    end
-end
-
 function EnableHitbox()
     HitboxActive = true
     OriginalSizes = {}
+    local myChar = Player.Character
     
     for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
-        ApplyHitboxToPlayer(otherPlayer)
+        if otherPlayer ~= Player then
+            local char = otherPlayer.Character
+            if char and char ~= myChar then
+                local parts = GetHitboxParts(char)
+                for _, part in ipairs(parts) do
+                    OriginalSizes[part] = {Size = part.Size}
+                    part.Size = part.Size * HitboxScale
+                end
+            end
+        end
     end
     
     HitboxBtn.Text = "🎯 ВЫКЛЮЧИТЬ ХИТБОКСЫ"
@@ -385,12 +372,9 @@ function DisableHitbox()
     HitboxStatus.TextColor3 = Color3.fromRGB(200, 80, 80)
 end
 
--- ===== ESP =====
+-- ===== ФУНКЦИИ ESP =====
 local function CreateHighlight(char)
     if not char then return nil end
-    -- Удаляем старый, если есть
-    local old = char:FindFirstChild("MurderESP")
-    if old then old:Destroy() end
     
     local highlight = Instance.new("Highlight")
     highlight.Name = "MurderESP"
@@ -404,21 +388,21 @@ local function CreateHighlight(char)
     return highlight
 end
 
-local function ApplyEspToPlayer(otherPlayer)
-    if otherPlayer == Player then return end
-    local char = otherPlayer.Character
-    if not char then return end
-    if char == Player.Character then return end
+local function RemoveAllHighlights()
+    for _, highlight in pairs(EspHighlights) do
+        if highlight and highlight.Parent then
+            highlight:Destroy()
+        end
+    end
+    EspHighlights = {}
     
-    local humanoid = char:FindFirstChild("Humanoid")
-    if not humanoid or humanoid.Health <= 0 then return end
-    
-    -- Проверяем, есть ли уже обводка
-    local existing = char:FindFirstChild("MurderESP")
-    if not existing then
-        local highlight = CreateHighlight(char)
-        if highlight then
-            EspHighlights[otherPlayer] = highlight
+    for _, p in ipairs(game.Players:GetPlayers()) do
+        if p.Character then
+            for _, obj in ipairs(p.Character:GetChildren()) do
+                if obj:IsA("Highlight") and obj.Name == "MurderESP" then
+                    obj:Destroy()
+                end
+            end
         end
     end
 end
@@ -426,9 +410,18 @@ end
 function EnableEsp()
     EspActive = true
     EspHighlights = {}
+    local myChar = Player.Character
     
     for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
-        ApplyEspToPlayer(otherPlayer)
+        if otherPlayer ~= Player then
+            local char = otherPlayer.Character
+            if char and char ~= myChar then
+                local highlight = CreateHighlight(char)
+                if highlight then
+                    EspHighlights[otherPlayer] = highlight
+                end
+            end
+        end
     end
     
     EspBtn.Text = "👁 ВЫКЛЮЧИТЬ ESP"
@@ -439,21 +432,7 @@ end
 
 function DisableEsp()
     EspActive = false
-    
-    for _, highlight in pairs(EspHighlights) do
-        if highlight and highlight.Parent then
-            highlight:Destroy()
-        end
-    end
-    EspHighlights = {}
-    
-    -- Чистим все оставшиеся
-    for _, p in ipairs(game.Players:GetPlayers()) do
-        if p.Character then
-            local h = p.Character:FindFirstChild("MurderESP")
-            if h then h:Destroy() end
-        end
-    end
+    RemoveAllHighlights()
     
     EspBtn.Text = "👁 ВКЛЮЧИТЬ ESP"
     EspBtn.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
@@ -461,53 +440,47 @@ function DisableEsp()
     EspStatus.TextColor3 = Color3.fromRGB(200, 80, 80)
 end
 
--- ===== ГЛАВНЫЙ ЦИКЛ — ОБНОВЛЕНИЕ ВСЕХ ИГРОКОВ =====
-task.spawn(function()
-    while ScreenGui.Parent do
-        task.wait(CheckInterval)
-        
-        -- Обновляем ESP
-        if EspActive then
-            for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
-                ApplyEspToPlayer(otherPlayer)
+local function UpdateEsp()
+    if not EspActive then return end
+    local myChar = Player.Character
+    
+    for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
+        if otherPlayer ~= Player then
+            local char = otherPlayer.Character
+            if char and char ~= myChar then
+                local humanoid = char:FindFirstChild("Humanoid")
+                if humanoid and humanoid.Health > 0 then
+                    if not EspHighlights[otherPlayer] or not EspHighlights[otherPlayer].Parent then
+                        local highlight = CreateHighlight(char)
+                        if highlight then
+                            EspHighlights[otherPlayer] = highlight
+                        end
+                    end
+                end
             end
         end
-        
-        -- Обновляем хитбоксы
-        if HitboxActive then
-            for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
-                ApplyHitboxToPlayer(otherPlayer)
-            end
-        end
-    end
-end)
-
--- ===== ОТСЛЕЖИВАНИЕ НОВЫХ ПЕРСОНАЖЕЙ =====
-local function OnCharacterAdded(otherPlayer)
-    task.wait(1) -- ждём загрузки персонажа
-    if EspActive then
-        ApplyEspToPlayer(otherPlayer)
-    end
-    if HitboxActive then
-        ApplyHitboxToPlayer(otherPlayer)
     end
 end
 
--- Подключаемся ко всем игрокам
-for _, p in ipairs(game.Players:GetPlayers()) do
-    if p ~= Player then
-        p.CharacterAdded:Connect(function()
-            OnCharacterAdded(p)
-        end)
+local function UpdateHitbox()
+    if not HitboxActive then return end
+    local myChar = Player.Character
+    
+    for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
+        if otherPlayer ~= Player then
+            local char = otherPlayer.Character
+            if char and char ~= myChar then
+                local parts = GetHitboxParts(char)
+                for _, part in ipairs(parts) do
+                    if not OriginalSizes[part] then
+                        OriginalSizes[part] = {Size = part.Size / HitboxScale}
+                        part.Size = part.Size * HitboxScale
+                    end
+                end
+            end
+        end
     end
 end
-
--- Новые игроки
-game.Players.PlayerAdded:Connect(function(p)
-    p.CharacterAdded:Connect(function()
-        OnCharacterAdded(p)
-    end)
-end)
 
 -- ===== ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК =====
 HitboxTab.MouseButton1Click:Connect(function()
@@ -543,4 +516,23 @@ CloseBtn.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
 end)
 
-print("✅ Murder Duels загружено! Проверка каждые " .. CheckInterval .. " сек")
+-- ===== АВТООБНОВЛЕНИЕ =====
+task.spawn(function()
+    while ScreenGui.Parent do
+        task.wait(RefreshCooldown)
+        if ScreenGui.Parent then
+            if EspActive then UpdateEsp() end
+            if HitboxActive then UpdateHitbox() end
+        end
+    end
+end)
+
+Player.CharacterAdded:Connect(function()
+    task.wait(1)
+    if EspActive then UpdateEsp() end
+    if HitboxActive then UpdateHitbox() end
+end)
+
+print("✅ Murder Duels загружено!")
+print("📦 ХИТБОКСЫ до 100")
+print("👁 ESP с выбором цвета")
