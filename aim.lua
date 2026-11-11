@@ -1,4 +1,4 @@
--- [[ Murder Duels — ХИТБОКСЫ + ESP (Стиль ARTARIO HUB) ]]
+-- [[ Murder Duels — ХИТБОКСЫ + ESP (Фикс нестабильности) ]]
 -- Разработчик: artar
 
 local Player = game.Players.LocalPlayer
@@ -6,15 +6,11 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 -- ===== НАСТРОЙКИ =====
-local CheckInterval = 0.5
 local HitboxHotkey = Enum.KeyCode.H
-
--- ===== ХИТБОКСЫ =====
 local HitboxScale = 3
 local HitboxActive = false
 local OriginalSizes = {}
 
--- ===== ESP =====
 local EspActive = false
 local EspColor = Color3.fromRGB(255, 0, 0)
 local EspHighlights = {}
@@ -37,7 +33,6 @@ MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
 
--- Шапка
 local TopBar = Instance.new("Frame")
 TopBar.Size = UDim2.new(1, 0, 0, 40)
 TopBar.BackgroundColor3 = Color3.fromRGB(40, 30, 30)
@@ -76,26 +71,23 @@ CloseBtn.BackgroundTransparency = 1
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.Parent = TopBar
 
--- Контент
 local Content = Instance.new("Frame")
 Content.Size = UDim2.new(1, 0, 1, -40)
 Content.Position = UDim2.new(0, 0, 0, 40)
 Content.BackgroundTransparency = 1
 Content.Parent = MainFrame
 
--- 🔥 НАДПИСЬ ПРО ГОРЯЧУЮ КЛАВИШУ (По центру)
 local HotkeyHint = Instance.new("TextLabel")
 HotkeyHint.Size = UDim2.new(0.9, 0, 0, 15)
 HotkeyHint.Position = UDim2.new(0.05, 0, 0.01, 0) 
 HotkeyHint.Text = "горячая клавиша - H"
 HotkeyHint.TextColor3 = Color3.fromRGB(120, 120, 120)
 HotkeyHint.TextSize = 10
-HotkeyHint.TextXAlignment = Enum.TextXAlignment.Center -- 🔥 Выравнивание по центру
+HotkeyHint.TextXAlignment = Enum.TextXAlignment.Center
 HotkeyHint.BackgroundTransparency = 1
 HotkeyHint.Font = Enum.Font.Gotham
 HotkeyHint.Parent = Content
 
--- ===== КНОПКИ =====
 local ToggleHitboxBtn = Instance.new("TextButton")
 ToggleHitboxBtn.Size = UDim2.new(0.9, 0, 0, 40)
 ToggleHitboxBtn.Position = UDim2.new(0.05, 0, 0.08, 0)
@@ -118,7 +110,6 @@ ToggleEspBtn.Font = Enum.Font.GothamBold
 ToggleEspBtn.Parent = Content
 Instance.new("UICorner", ToggleEspBtn).CornerRadius = UDim.new(0, 8)
 
--- 🔥 ВЫБОР ЦВЕТА ESP (Без текста, просто плашки)
 local ColorLabel = Instance.new("TextLabel")
 ColorLabel.Size = UDim2.new(0.9, 0, 0, 20)
 ColorLabel.Position = UDim2.new(0.05, 0, 0.44, 0)
@@ -139,7 +130,7 @@ ColorButtonsFrame.Parent = Content
 local RedBtn = Instance.new("TextButton")
 RedBtn.Size = UDim2.new(0.3, 0, 1, 0)
 RedBtn.Position = UDim2.new(0, 0, 0, 0)
-RedBtn.Text = "" -- 🔥 Убрали текст
+RedBtn.Text = ""
 RedBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 RedBtn.BorderSizePixel = 0
 RedBtn.Parent = ColorButtonsFrame
@@ -148,7 +139,7 @@ Instance.new("UICorner", RedBtn).CornerRadius = UDim.new(0, 6)
 local GreenBtn = Instance.new("TextButton")
 GreenBtn.Size = UDim2.new(0.3, 0, 1, 0)
 GreenBtn.Position = UDim2.new(0.35, 0, 0, 0)
-GreenBtn.Text = "" -- 🔥 Убрали текст
+GreenBtn.Text = ""
 GreenBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
 GreenBtn.BorderSizePixel = 0
 GreenBtn.Parent = ColorButtonsFrame
@@ -157,13 +148,12 @@ Instance.new("UICorner", GreenBtn).CornerRadius = UDim.new(0, 6)
 local BlueBtn = Instance.new("TextButton")
 BlueBtn.Size = UDim2.new(0.3, 0, 1, 0)
 BlueBtn.Position = UDim2.new(0.7, 0, 0, 0)
-BlueBtn.Text = "" -- 🔥 Убрали текст
+BlueBtn.Text = ""
 BlueBtn.BackgroundColor3 = Color3.fromRGB(50, 100, 200)
 BlueBtn.BorderSizePixel = 0
 BlueBtn.Parent = ColorButtonsFrame
 Instance.new("UICorner", BlueBtn).CornerRadius = UDim.new(0, 6)
 
--- Поле размера хитбокса
 local SizeInput = Instance.new("TextBox")
 SizeInput.Size = UDim2.new(0.9, 0, 0, 40)
 SizeInput.Position = UDim2.new(0.05, 0, 0.68, 0)
@@ -191,7 +181,7 @@ SizeInput.FocusLost:Connect(function()
     end
 end)
 
--- ===== ЛОГИКА ХИТБОКСОВ =====
+-- ===== ФУНКЦИИ =====
 local function ApplyHitboxToPlayer(op)
     if op == Player then return end
     local char = op.Character
@@ -199,9 +189,13 @@ local function ApplyHitboxToPlayer(op)
     
     for _, part in ipairs(char:GetChildren()) do
         if part:IsA("BasePart") then
+            -- Если размер не записан или игра его сбросила — применяем заново
             if not OriginalSizes[part] then
                 OriginalSizes[part] = {Size = part.Size}
                 part.Size = part.Size * HitboxScale
+            elseif part.Size ~= OriginalSizes[part].Size * HitboxScale then
+                -- Если игра пытается вернуть старый размер, мы его перебиваем
+                part.Size = OriginalSizes[part].Size * HitboxScale
             end
         end
     end
@@ -220,12 +214,13 @@ local function DisableHitbox()
     ToggleHitboxBtn.Text = "ХИТБОКСЫ: ВЫКЛ"
     ToggleHitboxBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     for part, data in pairs(OriginalSizes) do
-        if part and part.Parent then part.Size = data.Size end
+        if part and part.Parent then 
+            part.Size = data.Size 
+        end
     end
     OriginalSizes = {}
 end
 
--- ===== ЛОГИКА ESP =====
 local function ApplyEspToPlayer(op)
     if op == Player then return end
     local char = op.Character
@@ -318,10 +313,10 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- ===== ЦИКЛ ОБНОВЛЕНИЯ =====
+-- ===== ЦИКЛ ОБНОВЛЕНИЯ (Ускорен для стабильности) =====
 task.spawn(function()
     while ScreenGui.Parent do
-        task.wait(CheckInterval)
+        task.wait(0.1) -- 🔥 Проверяем быстрее (10 раз в секунду), чтобы хитбоксы не сбрасывались
         if EspActive then
             for _, p in ipairs(game.Players:GetPlayers()) do ApplyEspToPlayer(p) end
         end
@@ -354,4 +349,4 @@ CloseBtn.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
 end)
 
-print("✅ ARTARIO HUB (Murder Duels) финальный дизайн")
+print("✅ ARTARIO HUB (Murder Duels) загружен")
